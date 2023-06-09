@@ -1,73 +1,80 @@
-class MenuDisplay:
-    def __init__(self):
-        self.main_menu = "MAIN MENU\n" \
-                         "0 Exit\n" \
-                         "1 CRUD operations\n" \
-                         "2 Show top ten companies by criteria\n"
-
-        self.crud_menu = "\nCRUD MENU\n" \
-                         "0 Back\n" \
-                         "1 Create a company\n" \
-                         "2 Read a company\n" \
-                         "3 Update a company\n" \
-                         "4 Delete a company\n" \
-                         "5 List all companies\n"
-
-        self.top_ten_menu = "\nTOP TEN MENU\n" \
-                            "0 Back\n" \
-                            "1 List by ND/EBITDA\n" \
-                            "2 List by ROE\n" \
-                            "3 List by ROA\n"
-
-    def display_main_menu(self):
-        print(self.main_menu)
-
-    def display_crud_menu(self):
-        print(self.crud_menu)
-
-    def display_top_ten_menu(self):
-        print(self.top_ten_menu)
+from csv import DictReader
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, String, Float, create_engine
+from sqlalchemy.orm import sessionmaker
 
 
-def crud_menu():
-    while True:
-        user_input = input("Enter an option:\n")
-        if user_input == "0":
-            return
-        elif user_input in ["1", "2", "3", "4", "5"]:
-            print("Not implemented!\n")
-            return
-        else:
-            print("Invalid option!\n")
+# Create the companies table;
+# Create the financial table;
+Base = declarative_base()
 
 
-def top_ten_menu():
-    while True:
-        user_input = input("Enter an option:\n")
-        if user_input == "0":
-            return
-        elif user_input in ["1", "2", "3"]:
-            print("Not implemented!\n")
-            return
-        else:
-            print("Invalid option!\n")
+class Company(Base):
+    __tablename__ = 'companies'
+
+    ticker = Column(String, primary_key=True)
+    name = Column(String)
+    sector = Column(String)
+
+
+class Financial(Base):
+    __tablename__ = 'financial'
+
+    ticker = Column(String, foreign_key="companies.ticker", primary_key=True)
+    ebitda = Column(Float)
+    sales = Column(Float)
+    net_profit = Column(Float)
+    market_price = Column(Float)
+    net_debt = Column(Float)
+    assets = Column(Float)
+    equity = Column(Float)
+    cash_equivalents = Column(Float)
+    liabilities = Column(Float)
+
+
+# Create an SQLite database — investor.db
+engine = create_engine('sqlite:///investor.db')
+Base.metadata.create_all(engine)
+
+# Insert datasets to the tables
+Session = sessionmaker(bind=engine)
+session = Session()
+
+# Read the data from the csv files
+# Insert the data into the tables
+with open("companies.csv") as company_info:
+    companies = DictReader(company_info, delimiter=",")
+    for company in companies:
+        for key, value in company.items():
+            if value == "":
+                company[key] = None
+
+        company_obj = Company(
+            ticker=company["ticker"],
+            name=company["name"],
+            sector=company["sector"])
+        session.add(company_obj)
+        session.commit()
+
+
+with open("financial.csv") as financial_info:
+    financials = DictReader(financial_info, delimiter=",")
+    for financial in financials:
+        for key, value in financial.items():
+            if value == "":
+                financial[key] = None
+
+        financial_obj = Financial(ticker=financial["ticker"], ebitda=financial["ebitda"], sales=financial["sales"],
+                                    net_profit=financial["net_profit"], market_price=financial["market_price"],
+                                    net_debt=financial["net_debt"], assets=financial["assets"],
+                                    equity=financial["equity"], cash_equivalents=financial["cash_equivalents"],
+                                    liabilities=financial["liabilities"])
+        session.add(financial_obj)
+        session.commit()
 
 
 def main():
-    while True:
-        MenuDisplay().display_main_menu()
-        user_input = input("Enter an option:\n")
-        if user_input == "0":
-            print("Have a nice day!")
-            exit()
-        elif user_input == "1":
-            MenuDisplay().display_crud_menu()
-            crud_menu()
-        elif user_input == "2":
-            MenuDisplay().display_top_ten_menu()
-            top_ten_menu()
-        else:
-            print("Invalid option!\n")
+    print("Database created successfully!")
 
 
 if __name__ == "__main__":
