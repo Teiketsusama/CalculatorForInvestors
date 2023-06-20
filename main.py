@@ -40,6 +40,10 @@ class InvestorDB:
         session = sessionmaker(bind=self.engine, autoflush=False)
         self.session = session()
 
+    def is_init(self) -> bool:
+        # Check if the data is in the tables.
+        return self.session.query(Company).first() is not None and self.session.query(Financial).first() is not None
+
     def insert_data(self, file_name: str, table_name: Base) -> None:
         # Read the data from the csv files and insert it into the database.
         with open(file_name, 'r') as file:
@@ -48,9 +52,7 @@ class InvestorDB:
                 for key, value in row.items():
                     if value == '':
                         row[key] = None
-                # Check if the row already exists in the table.
-                if not self.session.query(table_name).filter_by(ticker=row["ticker"]).first():
-                    self.session.add(table_name(**row))
+                self.session.add(table_name(**row))
             self.session.commit()
 
     def create_company(self):
@@ -80,7 +82,7 @@ class InvestorDB:
             if "_" in key:
                 key = key.replace("_", " ")
             financial_data[key] = input(f"Enter {key} (in the format '987654321'):\n")
-        financial_data = {key.replace(" ", "_"): value for key, value in financial_data.items() if " " in key}
+        financial_data = {key.replace(" ", "_"): value for key, value in financial_data.items()}
         return financial_data
 
     def query_company(self) -> list:
@@ -225,6 +227,8 @@ def main():
         user_input = input("Enter an option:\n")
         if user_input == "0":
             print("Have a nice day!")
+            InvestorDB().session.close()
+            InvestorDB().engine.dispose()
             exit()
         elif user_input == "1":
             MenuDisplay().crud_menu_display()
@@ -238,6 +242,7 @@ def main():
 
 if __name__ == "__main__":
     print("Welcome to the Investor Program!\n")
-    InvestorDB().insert_data("companies.csv", Company)
-    InvestorDB().insert_data("financial.csv", Financial)
+    if not InvestorDB().is_init():
+        InvestorDB().insert_data("companies.csv", Company)
+        InvestorDB().insert_data("financial.csv", Financial)
     main()
