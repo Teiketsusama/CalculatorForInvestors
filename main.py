@@ -1,6 +1,6 @@
 from csv import DictReader
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, String, Float, create_engine, ForeignKey, func
+from sqlalchemy import Column, String, Float, create_engine, ForeignKey
 from sqlalchemy.orm import sessionmaker, relationship
 
 Base = declarative_base()
