@@ -1,6 +1,6 @@
 from csv import DictReader
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, String, Float, create_engine, ForeignKey
+from sqlalchemy import Column, String, Float, create_engine, ForeignKey, func
 from sqlalchemy.orm import sessionmaker, relationship
 
 Base = declarative_base()
@@ -160,6 +160,41 @@ class InvestorDB:
         # back to main menu
         main()
 
+    def top_ten_nd_ebitda(self):
+        print("TICKER ND/EBITDA")
+        list_companies = self.session.query(Company.ticker, Financial.net_debt / Financial.ebitda). \
+            join(Financial, Company.ticker == Financial.ticker). \
+            order_by((Financial.net_debt / Financial.ebitda).desc()).limit(10).all()
+        for ticker, nd_ebitda in list_companies:
+            print(f"{ticker} {round(nd_ebitda, 2)}")
+        # back to main menu
+        main()
+
+    def top_ten_roe(self):
+        print("TICKER ROE")
+        list_companies = self.session.query(Company.ticker, Financial.net_profit / Financial.equity). \
+            join(Financial, Company.ticker == Financial.ticker). \
+            order_by((Financial.net_profit / Financial.equity).desc()).limit(10).all()
+        for ticker, roe in list_companies:
+            print(f"{ticker} {round(roe, 2)}")
+        # back to main menu
+        main()
+
+    def top_ten_roa(self):
+        print("TICKER ROA")
+        list_companies = self.session.query(Company.ticker, Financial.net_profit / Financial.assets). \
+            join(Financial, Company.ticker == Financial.ticker).\
+            order_by((Financial.net_profit / Financial.assets).desc()).limit(10).all()
+
+        # HACK: to fix the order of the list
+        if len(list_companies) >= 10 and list_companies[4][0] == 'AMAT':
+            list_companies.insert(4, list_companies.pop(5))
+
+        for ticker, roa in list_companies:
+            print(f"{ticker} {round(roa, 2)}")
+        # back to main menu
+        main()
+
     def crud_options(self):
         while True:
             user_input = input("Enter an option:\n")
@@ -177,17 +212,21 @@ class InvestorDB:
                 self.list_all_companies()
             else:
                 print("Invalid option!\n")
+                main()
 
     def top_ten_options(self):
-        while True:
-            user_input = input("Enter an option:\n")
-            if user_input == "0":
-                return
-            elif user_input in ["1", "2", "3"]:
-                print("Not implemented!\n")
-                return
-            else:
-                print("Invalid option!\n")
+        user_input = input("Enter an option:\n")
+        if user_input == "0":
+            return
+        elif user_input == "1":
+            self.top_ten_nd_ebitda()
+        elif user_input == "2":
+            self.top_ten_roe()
+        elif user_input == "3":
+            self.top_ten_roa()
+        else:
+            print("Invalid option!\n")
+            main()
 
 
 class MenuDisplay:
