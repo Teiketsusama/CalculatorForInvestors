@@ -1,51 +1,63 @@
 from csv import DictReader
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, String, Float, create_engine, ForeignKey
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, relationship
+
+Base = declarative_base()
 
 
-class MenuDisplay:
+# Create the companies table;
+class Company(Base):
+    __tablename__ = 'companies'
+
+    ticker = Column(String, primary_key=True)
+    name = Column(String)
+    sector = Column(String)
+    financial = relationship("Financial", back_populates="companies", uselist=False)
+
+
+# Create the financial table;
+class Financial(Base):
+    __tablename__ = 'financial'
+
+    ticker = Column(String, ForeignKey('companies.ticker'), primary_key=True)
+    ebitda = Column(Float)
+    sales = Column(Float)
+    net_profit = Column(Float)
+    market_price = Column(Float)
+    net_debt = Column(Float)
+    assets = Column(Float)
+    equity = Column(Float)
+    cash_equivalents = Column(Float)
+    liabilities = Column(Float)
+    companies = relationship("Company", back_populates="financial")
+
+
+class InvestorDB:
     def __init__(self):
-        self.main_menu = "MAIN MENU\n" \
-                         "0 Exit\n" \
-                         "1 CRUD operations\n" \
-                         "2 Show top ten companies by criteria\n"
+        self.engine = create_engine('sqlite:///investor.db')
+        Base.metadata.create_all(self.engine)
+        session = sessionmaker(bind=self.engine, autoflush=False)
+        self.session = session()
 
-        self.crud_menu = "\nCRUD MENU\n" \
-                         "0 Back\n" \
-                         "1 Create a company\n" \
-                         "2 Read a company\n" \
-                         "3 Update a company\n" \
-                         "4 Delete a company\n" \
-                         "5 List all companies\n"
-
-        self.top_ten_menu = "\nTOP TEN MENU\n" \
-                            "0 Back\n" \
-                            "1 List by ND/EBITDA\n" \
-                            "2 List by ROE\n" \
-                            "3 List by ROA\n"
-
-    def display_main_menu(self):
-        print(self.main_menu)
-
-    def display_crud_menu(self):
-        print(self.crud_menu)
-
-    def display_top_ten_menu(self):
-        print(self.top_ten_menu)
-
-
-class CRUD:
-    def __init__(self):
-        self.session = Session()
+    def insert_data(self, file_name: str, table_name: Base) -> None:
+        # Read the data from the csv files and insert it into the database.
+        with open(file_name, 'r') as file:
+            reader = DictReader(file, delimiter=',')
+            for row in reader:
+                for key, value in row.items():
+                    if value == '':
+                        row[key] = None
+                # Check if the row already exists in the table.
+                if not self.session.query(table_name).filter_by(ticker=row["ticker"]).first():
+                    self.session.add(table_name(**row))
+            self.session.commit()
 
     def create_company(self):
-        # table companies
         ticker = input("Enter ticker (in the format 'MOON'):\n")
         name = input("Enter company (in the format 'Moon Corp'):\n")
         sector = input("Enter industries (in the format 'Technology'):\n")
-        # table financial
-        financial_data = CRUD.financial_display()
+        financial_data = self.financial_input()
 
         company_obj = Company(ticker=ticker, name=name, sector=sector)
         financial_obj = Financial(ticker=ticker, **financial_data)
@@ -55,10 +67,11 @@ class CRUD:
         self.session.commit()
 
         print("Company created successfully!\n")
+        # back to main menu
         main()
 
     @staticmethod
-    def financial_display() -> dict:
+    def financial_input() -> dict:
         financial_data_keys = []
         financial_data = {}
         [financial_data_keys.append(Financial.__table__.columns.keys()[i])
@@ -70,11 +83,10 @@ class CRUD:
         financial_data = {key.replace(" ", "_"): value for key, value in financial_data.items() if " " in key}
         return financial_data
 
-    @staticmethod
-    def query_company() -> list:
+    def query_company(self) -> list:
         while True:
             name_input = str(input("Enter company name:\n"))
-            company_list = session.query(Company, Financial).join(Financial, Company.ticker == Financial.ticker).\
+            company_list = self.session.query(Company, Financial).join(Financial, Company.ticker == Financial.ticker).\
                 filter(Company.name.ilike(f"%{name_input}%")).all()
 
             if not company_list:
@@ -85,7 +97,7 @@ class CRUD:
             return company_list
 
     def read_company(self):
-        company_list = CRUD.query_company()
+        company_list = self.query_company()
         num_input = int(input("Enter company number:\n"))
         company, financial = company_list[num_input]
         pe, ps, pb, nd_ebitda, roe, roa, la = None, None, None, None, None, None, None
@@ -111,29 +123,30 @@ class CRUD:
               f"ROE = {roe}\n"
               f"ROA = {roa}\n"
               f"L/A = {la}\n")
+        # back to main menu
         main()
 
     def update_company(self):
-        company_list = CRUD.query_company()
+        company_list = self.query_company()
         num_input = int(input("Enter company number:\n"))
         company, financial = company_list[num_input]
-        financial_data = CRUD.financial_display()
+        financial_data = self.financial_input()
         for key, value in financial_data.items():
             setattr(financial, key, value)
         self.session.commit()
         print("Company updated successfully!\n")
+        # back to main menu
         main()
 
     def delete_company(self):
-        company_list = CRUD.query_company()
+        company_list = self.query_company()
         num_input = int(input("Enter company number:\n"))
         company, financial = company_list[num_input]
-        session.expunge(financial)
-        session.expunge(company)
         self.session.delete(financial)
         self.session.delete(company)
         self.session.commit()
         print("Company deleted successfully!\n")
+        # back to main menu
         main()
 
     def list_all_companies(self):
@@ -142,9 +155,10 @@ class CRUD:
         list_companies.sort(key=lambda x: x.ticker)
         for company in list_companies:
             print(f"{company.ticker} {company.name} {company.sector}")
+        # back to main menu
         main()
 
-    def menu_options(self):
+    def crud_options(self):
         while True:
             user_input = input("Enter an option:\n")
             if user_input == "0":
@@ -162,95 +176,68 @@ class CRUD:
             else:
                 print("Invalid option!\n")
 
+    def top_ten_options(self):
+        while True:
+            user_input = input("Enter an option:\n")
+            if user_input == "0":
+                return
+            elif user_input in ["1", "2", "3"]:
+                print("Not implemented!\n")
+                return
+            else:
+                print("Invalid option!\n")
 
-def top_ten_menu():
-    while True:
-        user_input = input("Enter an option:\n")
-        if user_input == "0":
-            return
-        elif user_input in ["1", "2", "3"]:
-            print("Not implemented!\n")
-            return
-        else:
-            print("Invalid option!\n")
+
+class MenuDisplay:
+    def __init__(self):
+        self.main_menu = "MAIN MENU\n" \
+                         "0 Exit\n" \
+                         "1 CRUD operations\n" \
+                         "2 Show top ten companies by criteria\n"
+
+        self.crud_menu = "\nCRUD MENU\n" \
+                         "0 Back\n" \
+                         "1 Create a company\n" \
+                         "2 Read a company\n" \
+                         "3 Update a company\n" \
+                         "4 Delete a company\n" \
+                         "5 List all companies\n"
+
+        self.top_ten_menu = "\nTOP TEN MENU\n" \
+                            "0 Back\n" \
+                            "1 List by ND/EBITDA\n" \
+                            "2 List by ROE\n" \
+                            "3 List by ROA\n"
+
+    def main_menu_display(self):
+        print(self.main_menu)
+
+    def crud_menu_display(self):
+        print(self.crud_menu)
+
+    def top_ten_menu_display(self):
+        print(self.top_ten_menu)
 
 
 def main():
     while True:
-        MenuDisplay().display_main_menu()
+        MenuDisplay().main_menu_display()
         user_input = input("Enter an option:\n")
         if user_input == "0":
             print("Have a nice day!")
             exit()
         elif user_input == "1":
-            MenuDisplay().display_crud_menu()
-            CRUD().menu_options()
+            MenuDisplay().crud_menu_display()
+            InvestorDB().crud_options()
         elif user_input == "2":
-            MenuDisplay().display_top_ten_menu()
-            top_ten_menu()
+            MenuDisplay().top_ten_menu_display()
+            InvestorDB().top_ten_options()
         else:
             print("Invalid option!\n")
 
 
 if __name__ == "__main__":
     print("Welcome to the Investor Program!\n")
-    # Create the companies table;
-    # Create the financial table;
-    Base = declarative_base()
-
-
-    class Company(Base):
-        __tablename__ = 'companies'
-
-        ticker = Column(String, primary_key=True)
-        name = Column(String)
-        sector = Column(String)
-
-
-    class Financial(Base):
-        __tablename__ = 'financial'
-
-        ticker = Column(String, ForeignKey('companies.ticker'), primary_key=True)
-        ebitda = Column(Float)
-        sales = Column(Float)
-        net_profit = Column(Float)
-        market_price = Column(Float)
-        net_debt = Column(Float)
-        assets = Column(Float)
-        equity = Column(Float)
-        cash_equivalents = Column(Float)
-        liabilities = Column(Float)
-
-
-    # Create an SQLite database — investor.db
-    engine = create_engine('sqlite:///investor.db')
-    Base.metadata.create_all(engine)
-
-    # Insert datasets to the tables
-    Session = sessionmaker(bind=engine)
-    session = Session()
-
-    # Read the data from the csv files
-    # Insert the data into the tables
-    with open("companies.csv") as company_info:
-        companies = DictReader(company_info, delimiter=",")
-        for company in companies:
-            for key, value in company.items():
-                if value == "":
-                    company[key] = None
-            if not session.query(Company).filter_by(ticker=company['ticker']).first():
-                company_obj = Company(**company)
-                session.add(company_obj)
-            session.commit()
-
-    with open("financial.csv") as financial_info:
-        financials = DictReader(financial_info, delimiter=",")
-        for financial in financials:
-            for key, value in financial.items():
-                if value == "":
-                    financial[key] = None
-            if not session.query(Financial).filter_by(ticker=financial['ticker']).first():
-                financial_obj = Financial(**financial)
-                session.add(financial_obj)
-            session.commit()
+    InvestorDB().insert_data("companies.csv", Company)
+    InvestorDB().insert_data("financial.csv", Financial)
     main()
